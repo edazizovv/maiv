@@ -15,10 +15,10 @@ class NN(nn.Module):
 
     def __init__(self,
                  layers, layers_dimensions, layers_kwargs,
-                 activators,
+                 batchnorms, activators,
                  interdrops,
                  optimiser, optimiser_kwargs,
-                 epochs
+                 epochs, device=None
                  ):
 
         self.layers = None
@@ -31,6 +31,7 @@ class NN(nn.Module):
         self._layers = layers
         self._layers_dimensions = layers_dimensions
         self._layers_kwargs = layers_kwargs
+        self._batchnorms = batchnorms
         self._activators = activators
         self._interdrops = interdrops
         self._optimiser = optimiser
@@ -38,6 +39,8 @@ class NN(nn.Module):
         self._epochs = epochs
         self._aggregated_losses = None
         self._validation_losses = None
+
+        self.device = device
 
         super().__init__()
 
@@ -48,6 +51,8 @@ class NN(nn.Module):
         input_size = self.input_size
         for j in range(len(self._layers_dimensions)):
             all_layers.append(self._layers[j](input_size, self._layers_dimensions[j], **self._layers_kwargs[j]))
+            if not (not self._batchnorms[j]):
+                all_layers.append(self._batchnorms[j](self._layers_dimensions[j]))
             if self._activators[j] is not None:
                 if self._activators[j].__name__ == 'Softmax':
                     all_layers.append(self._activators[j](dim=1))
@@ -58,6 +63,8 @@ class NN(nn.Module):
             input_size = self._layers_dimensions[j]
 
         self.layers = nn.ModuleList(all_layers)
+        if self.device is not None:
+            self.layers.to(device=self.device)
 
         #
 
@@ -67,11 +74,27 @@ class NN(nn.Module):
         else:
             return self.layers[j]._get_name() in ['RNN', 'GRU', 'LSTM']
 
+    def _depack_hidden(self, y, j):
+        if self.layers[j]._get_name() == 'LSTM':
+            y, n = self.layers[j](y, self.hidden_cell(j))
+            hn, cn = n
+        elif self.layers[j]._get_name() in ['RNN', 'GRU']:
+            y, hn = self.layers[j](y)
+        else:
+            raise Exception("Whoops...")
+        return y
+
     def _is_technical(self, j):
-        return self.layers[j]._get_name() in ['Dropout']
+        return self.layers[j]._get_name() in ['Dropout', 'BatchNorm1d']
 
     def hidden_cell(self, j):
-        return torch.zeros(1, self.batch_size, self.layers[j].hidden_size).requires_grad_()
+        if self.layers[j]._get_name() == 'LSTM':
+            return torch.zeros(1, self.batch_size, self.layers[j].hidden_size).requires_grad_(), \
+                   torch.zeros(1, self.batch_size, self.layers[j].hidden_size).requires_grad_()
+        elif self.layers[j]._get_name() in ['RNN', 'GRU']:
+            return torch.zeros(1, self.batch_size, self.layers[j].hidden_size).requires_grad_()
+        else:
+            raise Exception("Whoops...")
 
     def forward(self, x):
 
@@ -93,7 +116,8 @@ class NN(nn.Module):
                     else:
                         raise Exception("Whoops...")
                 else:
-                    y, hidden_cell = self.layers[j](y, self.hidden_cell(j))
+                    # y, hidden_cell = self.layers[j](y, self.hidden_cell(j))
+                    y = self._depack_hidden(y, j)
             else:
                 y = self.layers[j](y)
 
@@ -156,6 +180,9 @@ class NN(nn.Module):
     def predict(self, X_test):
 
         output = self(X_test)
+        if self.device is not None:
+            if self.device.type == 'cuda':
+                output = output.cpu()
         result = output.detach().numpy()
 
         return result
@@ -165,20 +192,21 @@ class WrappedNN:
 
     def __init__(self,
                  layers, layers_dimensions, layers_kwargs,
-                 activators,
+                 batchnorms, activators,
                  optimiser, optimiser_kwargs, loss_function,
                  interdrops,
-                 epochs=500):
+                 epochs=500,
+                 device=None):
         self.optimiser = optimiser
         self.optimiser_kwargs = optimiser_kwargs
         self.loss_function = loss_function()
 
         self.model = NN(
             layers=layers, layers_dimensions=layers_dimensions, layers_kwargs=layers_kwargs,
-            activators=activators,
+            batchnorms=batchnorms, activators=activators,
             interdrops=interdrops,
             optimiser=optimiser, optimiser_kwargs=optimiser_kwargs,
-            epochs=epochs)
+            epochs=epochs, device=device)
 
     def fit(self, X_train, Y_train, X_val, Y_val):
         self.model.fit(X_train=X_train, y_train=Y_train, X_val=X_val, y_val=Y_val, loss_function=self.loss_function)

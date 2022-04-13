@@ -12,7 +12,7 @@ for d in os.listdir('./RAW/'):
     data_spice = data_spice.rename(columns={x: '{0}__{1}'.format(d.replace('.xlsx', ''), x)
                                             for x in data_spice.columns})
     data_spice = data_spice.rename(columns={data_spice.columns[0]: 'datetime'})
-    data_spice['datetime'] = pandas.to_datetime(data_spice['datetime'])
+    data_spice['datetime'] = pandas.to_datetime(data_spice['datetime'], infer_datetime_format=True)
     data_spice = data_spice.set_index('datetime')
     data_spice = data_spice.sort_index()
     data_hub.append(data_spice)
@@ -30,6 +30,11 @@ data['TRES10Y_GB__Max__REAL'] = data['TRES10Y_GB__Max'] - data['CPI_GB__CPI_YOY_
 data['TRES10Y_GB__Min__REAL'] = data['TRES10Y_GB__Min'] - data['CPI_GB__CPI_YOY_STDZ_SA'].ffill()
 
 data['_TARGET'] = data['GBPX__Close'] / data['JPYX__Close']
+# data['_TARGET'] = data['JPYX__Close'] / data['GBPX__Close']
+data['_TARGET_ewm21'] = data['_TARGET'].ffill().ewm(span=21, adjust=False).mean()
+data['_TARGET_ewm55'] = data['_TARGET'].ffill().ewm(span=55, adjust=False).mean()
+# data['_TARGET_ewm21'] = data['_TARGET'].ffill().rolling(window=21).mean()
+# data['_TARGET_ewm55'] = data['_TARGET'].ffill().rolling(window=55).mean()
 data['TARGET_1M'] = data['_TARGET'].shift(-30)
 data['TARGET_3M'] = data['_TARGET'].shift(-90)
 data['TARGET_6M'] = data['_TARGET'].shift(-180)

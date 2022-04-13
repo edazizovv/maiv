@@ -11,7 +11,8 @@ import pandas
 #
 data = pandas.read_excel('./data/dataset_raw.xlsx')
 data = data.set_index('datetime')
-cols = data.columns
+exclude = ['_TARGET', 'TARGET_1M', 'TARGET_3M', 'TARGET_6M', '_TARGET_ewm21', '_TARGET_ewm55']
+cols = [x for x in data.columns if x not in exclude]
 
 tb = {'ACTUAL': ['TRADEB_GB__TRADEBALANCE_ACTUAL', 'TRADEB_JP__TRADEBALANCE_ACTUAL'],
       'POLL': ['TRADEB_GB__TRADEBALANCE_POLL', 'TRADEB_JP__TRADEBALANCE_POLL'],
