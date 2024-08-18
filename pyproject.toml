@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "maiv"
+version = "0.0.1"
+description = "Deal-focused prediction suite"
+authors = [
+  "edazizovv",
+]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "maiv"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
